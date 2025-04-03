@@ -15,8 +15,6 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
-import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.plugin.common.PluginRegistry.Registrar
 import io.flutter.plugin.common.PluginRegistry.NewIntentListener
 import org.json.JSONArray
 import org.json.JSONObject
@@ -85,15 +83,6 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     // them functionally equivalent. Only one of onAttachedToEngine or registerWith will be called
     // depending on the user's project. onAttachedToEngine or registerWith must both be defined
     // in the same class.
-    companion object {
-        @JvmStatic
-        fun registerWith(registrar: Registrar) {
-            val instance = ReceiveSharingIntentPlugin()
-            instance.applicationContext = registrar.context()
-            instance.setupCallbackChannels(registrar.messenger())
-        }
-    }
-
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
