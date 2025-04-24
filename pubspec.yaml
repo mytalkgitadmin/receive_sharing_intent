@@ -29,8 +29,8 @@ flutter:
       android:
         package: com.kasem.receive_sharing_intent
         pluginClass: ReceiveSharingIntentPlugin
-      ios:
-        pluginClass: ReceiveSharingIntentPlugin
+#      ios:
+#        pluginClass: ReceiveSharingIntentPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:
