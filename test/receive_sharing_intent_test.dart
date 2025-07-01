@@ -1,37 +1,61 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:async';
+
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 void main() {
-  const MethodChannel channel =
-      const MethodChannel('receive_sharing_intent/messages');
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-  const _testUriString = "content://media/external/images/media/43993";
+  test('setMockValues', () async {
+    final expectedMediaFiles = [
+      SharedMediaFile(path: 'path1', type: SharedMediaType.image),
+      SharedMediaFile(path: 'path2', type: SharedMediaType.video),
+    ];
+    final streamController =
+        StreamController<List<SharedMediaFile>>.broadcast();
+    ReceiveSharingIntent.setMockValues(
+      initialMedia: expectedMediaFiles,
+      mediaStream: streamController.stream,
+    );
 
-  setUp(() {
-    channel.setMockMethodCallHandler((MethodCall methodCall) async {
-      switch (methodCall.method) {
-        case "getInitialText":
-          return _testUriString;
-        case "getInitialTextAsUri":
-          return Uri.parse(_testUriString);
-        default:
-          throw UnimplementedError();
-      }
+    // Test getInitialMedia
+    final mediaFiles = await ReceiveSharingIntent.instance.getInitialMedia();
+    expect(mediaFiles.length, expectedMediaFiles.length);
+    for (int i = 0; i < mediaFiles.length; i++) {
+      expect(mediaFiles[i].path, expectedMediaFiles[i].path);
+      expect(mediaFiles[i].type, expectedMediaFiles[i].type);
+    }
+    // END of getInitialMedia test
+
+    // Test getMediaStream
+    final emittedMediaFiles = <List<SharedMediaFile>>[];
+    final subscription =
+        ReceiveSharingIntent.instance.getMediaStream().listen((event) {
+      emittedMediaFiles.add(event);
     });
-  });
 
-  tearDown(() {
-    channel.setMockMethodCallHandler(null);
-  });
+    final expectedMediaFilesStream = [
+      SharedMediaFile(path: 'path3', type: SharedMediaType.image),
+      SharedMediaFile(path: 'path4', type: SharedMediaType.video),
+    ];
+    streamController.add(expectedMediaFilesStream);
+    await Future.delayed(Duration.zero); // Allow stream to process
 
-  test('getInitialText', () async {
-    var actual = await ReceiveSharingIntent.getInitialText();
-    expect(actual, _testUriString);
-  });
+    expect(emittedMediaFiles.length, 1);
+    expect(emittedMediaFiles[0].length, expectedMediaFiles.length);
+    for (int i = 0; i < emittedMediaFiles[0].length; i++) {
+      expect(emittedMediaFiles[0][i].path, expectedMediaFilesStream[i].path);
+      expect(emittedMediaFiles[0][i].type, expectedMediaFilesStream[i].type);
+    }
 
-  test('getInitialTextAsUri', () async {
-    var actual = await ReceiveSharingIntent.getInitialTextAsUri();
-    expect(actual, Uri.parse(_testUriString));
+    subscription.cancel();
+    streamController.close();
+    // END of getMediaStream test
+
+    // Test reset
+    await ReceiveSharingIntent.instance.reset();
+    final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
+    expect(initialMedia.isEmpty, true);
+    // END of reset test
   });
 }

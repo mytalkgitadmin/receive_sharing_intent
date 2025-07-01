@@ -1,18 +1,35 @@
 # receive_sharing_intent
+[![pub package](https://img.shields.io/pub/v/receive_sharing_intent.svg)](https://pub.dev/packages/receive_sharing_intent)
 
-A flutter plugin that enables flutter apps to receive sharing photos, videos, text, urls or any other file types from another app.
+A Flutter plugin that enables flutter apps to receive sharing photos, videos, text, urls or any other file types from another app.
 
 Also, supports iOS Share extension and launching the host app automatically.
-Check the provided example for more info.
+Check the provided [example](./example/lib/main.dart) for more info.
+
+
+
+|             | Android                 | iOS               |
+|-------------|-------------------------|-------------------|
+| **Support** | SDK 19+ (Kotlin 1.9.22) | 12.0+ (Swift 5.0) |
+
+
 
 ![Alt Text](./example/demo.gif)
 
 
 # Usage
 
+To use this plugin, add `receive_sharing_intent` as a [dependency in your pubspec.yaml file](https://flutter.io/platform-plugins/). For example:
+
+```yaml
+dependencies:
+  receive_sharing_intent: ^latest
+```
+
 ## Android
 
-android/app/src/main/manifest.xml
+Add the following filters to your [android/app/src/main/AndroidManifest.xml](./example/android/app/src/main/AndroidManifest.xml):
+
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 .....
@@ -22,24 +39,33 @@ android/app/src/main/manifest.xml
         android:name="io.flutter.app.FlutterApplication"
         ...
         >
-
+<!--Set activity launchMode to singleTask, if you want to prevent creating new activity instance everytime there is a new intent.-->
     <activity
             android:name=".MainActivity"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
+            <!--TODO:  Add this filter, if you want support opening urls into your app-->
             <intent-filter>
                <action android:name="android.intent.action.VIEW" />
                <category android:name="android.intent.category.DEFAULT" />
                <category android:name="android.intent.category.BROWSABLE" />
-               <!--TODO:  Add this filter, if you want support opening urls into your app-->
                <data
                    android:scheme="https"
                    android:host="example.com"
                    android:pathPrefix="/invite"/>
+            </intent-filter>
+
+            <!--TODO:  Add this filter, if you want support opening files into your app-->
+            <intent-filter>
+              <action android:name="android.intent.action.VIEW" />
+              <category android:name="android.intent.category.DEFAULT" />
+              <data
+                   android:mimeType="*/*"
+                   android:scheme="content" />
             </intent-filter>
 
              <!--TODO: Add this filter, if you want to support sharing text into your app-->
@@ -92,49 +118,22 @@ android/app/src/main/manifest.xml
 ....
 ```
 
-Add the following, if you want to prevent creating new activity instance everytime there is a new intent.
+## iOS
 
-AndroidManifest.xml
-```
-<activity android:launchMode="singleTask" ... >...</activity>
-```
+#### 1. Create Share Extension
 
-### iOS
+- Using Xcode, go to File/New/Target and Choose "Share Extension".
+- Give it a name, i.e., "Share Extension".
 
-#### 1. Add the following
-ios/Runner/info.plist
+Make sure the deployment target for Runner.app and the share extension is the same.
+
+#### 2. Replace your [ios/Share Extension/Info.plist](./example/ios/Share%20Extension/Info.plist) with the following:
+
 ```xml
-...
-<key>AppGroupId</key>
-<string>$(CUSTOM_GROUP_ID)</string>
-<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>ShareMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-			</array>
-		</dict>
-	</array>
-
-<key>NSPhotoLibraryUsageDescription</key>
-<string>To upload photos, please allow permission to access your photo library.</string>
-...
-```
-
-#### 2. Create Share Extension
-
-- Using xcode, go to File/New/Target and Choose "Share Extension"
-- Give it a name i.e. "Share Extension"
-
-##### Make sure the deployment target for Runner.app and the share extension is the same. 
-
-##### Add the following code:
-ios/Share Extension/info.plist
-```xml
-....
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
     <key>AppGroupId</key>
     <string>$(CUSTOM_GROUP_ID)</string>
 	<key>CFBundleVersion</key>
@@ -175,11 +174,35 @@ ios/Share Extension/info.plist
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>
 	</dict>
-....
+  </dict>
+</plist>
+```
+#### 3. Add the following to your [ios/Runner/Info.plist](./example/ios/Runner/Info.plist):
+
+```xml
+...
+<key>AppGroupId</key>
+<string>$(CUSTOM_GROUP_ID)</string>
+<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ShareMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			</array>
+		</dict>
+	</array>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>To upload photos, please allow permission to access your photo library.</string>
+...
 ```
 
+#### 4. Add the following to your [ios/Runner/Runner.entitlements](./example/ios/Runner/Runner.entitlements):
 
-ios/Runner/Runner.entitlements
+
 ```xml
 ....
     <!--TODO:  Add this tag, if you want support opening urls into your app-->
@@ -191,370 +214,8 @@ ios/Runner/Runner.entitlements
 ```
 
 
-ios/Share Extension/ShareViewController.swift
-
-* Look at `loadIds()` for configure and details
-```swift
-import UIKit
-import Social
-import MobileCoreServices
-import Photos
-
-class ShareViewController: SLComposeServiceViewController {
-    var hostAppBundleIdentifier = ""
-    var appGroupId = ""
-    let sharedKey = "ShareKey"
-    var sharedMedia: [SharedMediaFile] = []
-    var sharedText: [String] = []
-    let imageContentType = kUTTypeImage as String
-    let videoContentType = kUTTypeMovie as String
-    let textContentType = kUTTypeText as String
-    let urlContentType = kUTTypeURL as String
-    let fileURLType = kUTTypeFileURL as String;
-
-    override func isContentValid() -> Bool {
-        return true
-    }
-
-    private func loadIds() {
-        // loading Share extension App Id
-        let shareExtensionAppBundleIdentifier = Bundle.main.bundleIdentifier!;
-
-
-        // convert ShareExtension id to host app id
-        // By default it is remove last part of id after last point
-        // For example: com.test.ShareExtension -> com.test
-        let lastIndexOfPoint = shareExtensionAppBundleIdentifier.lastIndex(of: ".");
-        hostAppBundleIdentifier = String(shareExtensionAppBundleIdentifier[..<lastIndexOfPoint!]);
-
-        // loading custom AppGroupId from Build Settings or use group.<hostAppBundleIdentifier>
-        appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(hostAppBundleIdentifier)";
-    }
-
-    override func viewDidLoad() {
-        super.viewDidLoad();
-
-        // load group and app id from build info
-        loadIds();
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-
-        // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
-        if let content = extensionContext!.inputItems[0] as? NSExtensionItem {
-            if let contents = content.attachments {
-                for (index, attachment) in (contents).enumerated() {
-                    if attachment.hasItemConformingToTypeIdentifier(imageContentType) {
-                        handleImages(content: content, attachment: attachment, index: index)
-                    } else if attachment.hasItemConformingToTypeIdentifier(textContentType) {
-                        handleText(content: content, attachment: attachment, index: index)
-                    } else if attachment.hasItemConformingToTypeIdentifier(fileURLType) {
-                        handleFiles(content: content, attachment: attachment, index: index)
-                    } else if attachment.hasItemConformingToTypeIdentifier(urlContentType) {
-                        handleUrl(content: content, attachment: attachment, index: index)
-                    } else if attachment.hasItemConformingToTypeIdentifier(videoContentType) {
-                        handleVideos(content: content, attachment: attachment, index: index)
-                    }
-                }
-            }
-        }
-    }
-
-    override func didSelectPost() {
-        print("didSelectPost");
-    }
-
-    override func configurationItems() -> [Any]! {
-        // To add configuration options via table cells at the bottom of the sheet, return an array of SLComposeSheetConfigurationItem here.
-        return []
-    }
-
-    private func handleText (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
-        attachment.loadItem(forTypeIdentifier: textContentType, options: nil) { [weak self] data, error in
-
-            if error == nil, let item = data as? String, let this = self {
-
-                this.sharedText.append(item)
-
-                // If this is the last item, save imagesData in userDefaults and redirect to host app
-                if index == (content.attachments?.count)! - 1 {
-                    let userDefaults = UserDefaults(suiteName: this.appGroupId)
-                    userDefaults?.set(this.sharedText, forKey: this.sharedKey)
-                    userDefaults?.synchronize()
-                    this.redirectToHostApp(type: .text)
-                }
-
-            } else {
-                self?.dismissWithError()
-            }
-        }
-    }
-
-    private func handleUrl (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
-        attachment.loadItem(forTypeIdentifier: urlContentType, options: nil) { [weak self] data, error in
-
-            if error == nil, let item = data as? URL, let this = self {
-
-                this.sharedText.append(item.absoluteString)
-
-                // If this is the last item, save imagesData in userDefaults and redirect to host app
-                if index == (content.attachments?.count)! - 1 {
-                    let userDefaults = UserDefaults(suiteName: this.appGroupId)
-                    userDefaults?.set(this.sharedText, forKey: this.sharedKey)
-                    userDefaults?.synchronize()
-                    this.redirectToHostApp(type: .text)
-                }
-
-            } else {
-                self?.dismissWithError()
-            }
-        }
-    }
-
-    private func handleImages (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
-        attachment.loadItem(forTypeIdentifier: imageContentType, options: nil) { [weak self] data, error in
-
-            if error == nil, let url = data as? URL, let this = self {
-
-                // Always copy
-                let fileName = this.getFileName(from: url, type: .image)
-                let newPath = FileManager.default
-                    .containerURL(forSecurityApplicationGroupIdentifier: this.appGroupId)!
-                    .appendingPathComponent(fileName)
-                let copied = this.copyFile(at: url, to: newPath)
-                if(copied) {
-                    this.sharedMedia.append(SharedMediaFile(path: newPath.absoluteString, thumbnail: nil, duration: nil, type: .image))
-                }
-
-                // If this is the last item, save imagesData in userDefaults and redirect to host app
-                if index == (content.attachments?.count)! - 1 {
-                    let userDefaults = UserDefaults(suiteName: this.appGroupId)
-                    userDefaults?.set(this.toData(data: this.sharedMedia), forKey: this.sharedKey)
-                    userDefaults?.synchronize()
-                    this.redirectToHostApp(type: .media)
-                }
-
-            } else {
-                 self?.dismissWithError()
-            }
-        }
-    }
-
-    private func handleVideos (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
-        attachment.loadItem(forTypeIdentifier: videoContentType, options: nil) { [weak self] data, error in
-
-            if error == nil, let url = data as? URL, let this = self {
-
-                // Always copy
-                let fileName = this.getFileName(from: url, type: .video)
-                let newPath = FileManager.default
-                    .containerURL(forSecurityApplicationGroupIdentifier: this.appGroupId)!
-                    .appendingPathComponent(fileName)
-                let copied = this.copyFile(at: url, to: newPath)
-                if(copied) {
-                    guard let sharedFile = this.getSharedMediaFile(forVideo: newPath) else {
-                        return
-                    }
-                    this.sharedMedia.append(sharedFile)
-                }
-
-                // If this is the last item, save imagesData in userDefaults and redirect to host app
-                if index == (content.attachments?.count)! - 1 {
-                    let userDefaults = UserDefaults(suiteName: this.appGroupId)
-                    userDefaults?.set(this.toData(data: this.sharedMedia), forKey: this.sharedKey)
-                    userDefaults?.synchronize()
-                    this.redirectToHostApp(type: .media)
-                }
-
-            } else {
-                 self?.dismissWithError()
-            }
-        }
-    }
-
-    private func handleFiles (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
-        attachment.loadItem(forTypeIdentifier: fileURLType, options: nil) { [weak self] data, error in
-
-            if error == nil, let url = data as? URL, let this = self {
-
-                // Always copy
-                let fileName = this.getFileName(from :url, type: .file)
-                let newPath = FileManager.default
-                    .containerURL(forSecurityApplicationGroupIdentifier: this.appGroupId)!
-                    .appendingPathComponent(fileName)
-                let copied = this.copyFile(at: url, to: newPath)
-                if (copied) {
-                    this.sharedMedia.append(SharedMediaFile(path: newPath.absoluteString, thumbnail: nil, duration: nil, type: .file))
-                }
-
-                if index == (content.attachments?.count)! - 1 {
-                    let userDefaults = UserDefaults(suiteName: this.appGroupId)
-                    userDefaults?.set(this.toData(data: this.sharedMedia), forKey: this.sharedKey)
-                    userDefaults?.synchronize()
-                    this.redirectToHostApp(type: .file)
-                }
-
-            } else {
-                self?.dismissWithError()
-            }
-        }
-    }
-
-    private func dismissWithError() {
-        print("[ERROR] Error loading data!")
-        let alert = UIAlertController(title: "Error", message: "Error loading data", preferredStyle: .alert)
-
-        let action = UIAlertAction(title: "Error", style: .cancel) { _ in
-            self.dismiss(animated: true, completion: nil)
-        }
-
-        alert.addAction(action)
-        present(alert, animated: true, completion: nil)
-        extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
-    }
-
-    private func redirectToHostApp(type: RedirectType) {
-        // ids may not loaded yet so we need loadIds here too
-        loadIds();
-        let url = URL(string: "ShareMedia-\(hostAppBundleIdentifier)://dataUrl=\(sharedKey)#\(type)")
-        var responder = self as UIResponder?
-        let selectorOpenURL = sel_registerName("openURL:")
-
-        while (responder != nil) {
-            if (responder?.responds(to: selectorOpenURL))! {
-                let _ = responder?.perform(selectorOpenURL, with: url)
-            }
-            responder = responder!.next
-        }
-        extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
-    }
-
-    enum RedirectType {
-        case media
-        case text
-        case file
-    }
-
-    func getExtension(from url: URL, type: SharedMediaType) -> String {
-        let parts = url.lastPathComponent.components(separatedBy: ".")
-        var ex: String? = nil
-        if (parts.count > 1) {
-            ex = parts.last
-        }
-
-        if (ex == nil) {
-            switch type {
-                case .image:
-                    ex = "PNG"
-                case .video:
-                    ex = "MP4"
-                case .file:
-                    ex = "TXT"
-            }
-        }
-        return ex ?? "Unknown"
-    }
-
-    func getFileName(from url: URL, type: SharedMediaType) -> String {
-        var name = url.lastPathComponent
-
-        if (name.isEmpty) {
-            name = UUID().uuidString + "." + getExtension(from: url, type: type)
-        }
-
-        return name
-    }
-
-    func copyFile(at srcURL: URL, to dstURL: URL) -> Bool {
-        do {
-            if FileManager.default.fileExists(atPath: dstURL.path) {
-                try FileManager.default.removeItem(at: dstURL)
-            }
-            try FileManager.default.copyItem(at: srcURL, to: dstURL)
-        } catch (let error) {
-            print("Cannot copy item at \(srcURL) to \(dstURL): \(error)")
-            return false
-        }
-        return true
-    }
-
-    private func getSharedMediaFile(forVideo: URL) -> SharedMediaFile? {
-        let asset = AVAsset(url: forVideo)
-        let duration = (CMTimeGetSeconds(asset.duration) * 1000).rounded()
-        let thumbnailPath = getThumbnailPath(for: forVideo)
-
-        if FileManager.default.fileExists(atPath: thumbnailPath.path) {
-            return SharedMediaFile(path: forVideo.absoluteString, thumbnail: thumbnailPath.absoluteString, duration: duration, type: .video)
-        }
-
-        var saved = false
-        let assetImgGenerate = AVAssetImageGenerator(asset: asset)
-        assetImgGenerate.appliesPreferredTrackTransform = true
-        //        let scale = UIScreen.main.scale
-        assetImgGenerate.maximumSize =  CGSize(width: 360, height: 360)
-        do {
-            let img = try assetImgGenerate.copyCGImage(at: CMTimeMakeWithSeconds(600, preferredTimescale: Int32(1.0)), actualTime: nil)
-            try UIImage.pngData(UIImage(cgImage: img))()?.write(to: thumbnailPath)
-            saved = true
-        } catch {
-            saved = false
-        }
-
-        return saved ? SharedMediaFile(path: forVideo.absoluteString, thumbnail: thumbnailPath.absoluteString, duration: duration, type: .video) : nil
-
-    }
-
-    private func getThumbnailPath(for url: URL) -> URL {
-        let fileName = Data(url.lastPathComponent.utf8).base64EncodedString().replacingOccurrences(of: "==", with: "")
-        let path = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)!
-            .appendingPathComponent("\(fileName).jpg")
-        return path
-    }
-
-    class SharedMediaFile: Codable {
-        var path: String; // can be image, video or url path. It can also be text content
-        var thumbnail: String?; // video thumbnail
-        var duration: Double?; // video duration in milliseconds
-        var type: SharedMediaType;
-
-
-        init(path: String, thumbnail: String?, duration: Double?, type: SharedMediaType) {
-            self.path = path
-            self.thumbnail = thumbnail
-            self.duration = duration
-            self.type = type
-        }
-
-        // Debug method to print out SharedMediaFile details in the console
-        func toString() {
-            print("[SharedMediaFile] \n\tpath: \(self.path)\n\tthumbnail: \(self.thumbnail)\n\tduration: \(self.duration)\n\ttype: \(self.type)")
-        }
-    }
-
-    enum SharedMediaType: Int, Codable {
-        case image
-        case video
-        case file
-    }
-
-    func toData(data: [SharedMediaFile]) -> Data {
-        let encodedData = try? JSONEncoder().encode(data)
-        return encodedData!
-    }
-}
-
-extension Array {
-    subscript (safe index: UInt) -> Element? {
-        return Int(index) < count ? self[Int(index)] : nil
-    }
-}
-```
-
-ios/Podfile
-
-```
+#### 5. Add the following to your [ios/Podfile](./example/ios/Podfile):
+```ruby
 ...
 target 'Runner' do
   use_frameworks!
@@ -562,7 +223,7 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 
-  # Sharing Extension is name of Extension which you created. It is 'Share Extension' and 'Sharing Extension' in example
+  # Share Extension is name of Extension which you created which is in this case 'Share Extension'
   target 'Share Extension' do
     inherit! :search_paths
   end
@@ -570,25 +231,53 @@ end
 ...
 ```
 
-#### 3. Add Runner and Share Extension in the same group
+#### 6. Add Runner and Share Extension in the same group
 
-* Go to the Capabilities tab and switch on the App Groups switch for both targets. 
-* Add a new group and name it as you want. For example `group.YOUR_HOST_APP_BUNDLE_IDENTIFIER` in my case `group.com.kasem.sharing`
-* Add User-defined(`Build Settings -> +`) string `CUSTOM_GROUP_ID` in *BOTH* Targets: `Runner` and `Share Extension` and set value to group id created above. You can use different group ids depends on flavor schemes
+* Go to `Signing & Capabilities` tab and add App Groups capability in **BOTH** Targets: `Runner` and `Share Extension` 
+* Add a new container with the name of your choice. For example `group.MyContainer` in the example project its `group.com.kasem.ShareExtention`
+* Add User-defined(`Build Settings -> +`) string `CUSTOM_GROUP_ID` in **BOTH** Targets: `Runner` and `Share Extension` and set value to group id created above. You can use different group ids depends on your flavor schemes
 
-#### 4. Compiling issues and their fixes
+#### 7. Go to Build Phases of your Runner target and move `Embed Foundation Extension` to the top of `Thin Binary`. 
 
+
+#### 8. Make your `ShareViewController`  [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `RSIShareViewController`:
+
+
+```swift
+// If you get no such module 'receive_sharing_intent' error. 
+// Go to Build Phases of your Runner target and
+// move `Embed Foundation Extension` to the top of `Thin Binary`. 
+import receive_sharing_intent
+
+class ShareViewController: RSIShareViewController {
+      
+    // Use this method to return false if you don't want to redirect to host app automatically.
+    // Default is true
+    override func shouldAutoRedirect() -> Bool {
+        return false
+    }
+    
+}
+```
+
+#### Compiling issues and their fixes
+
+* Error: No such module 'receive_sharing_intent'
+  * Fix: Go to Build Phases of your Runner target and move `Embed Foundation Extension` to the top of `Thin Binary`.
+  
 * Error: App does not build after adding Share Extension?
-* Fix: Check Build Settings of your share extension and remove everything that tries to import Cocoapods from your main project. i.e. remove everything under `Linking/Other Linker Flags` 
+  * Fix: Check Build Settings of your share extension and remove everything that tries to import Cocoapods from your main project. i.e. remove everything under `Linking/Other Linker Flags` 
 
 * You might need to disable bitcode for the extension target
 
 * Error: Invalid Bundle. The bundle at 'Runner.app/Plugins/Sharing Extension.appex' contains disallowed file 'Frameworks'
-* Fix: https://stackoverflow.com/a/25789145/2061365
+    * Fix: https://stackoverflow.com/a/25789145/2061365
 
 
 
 ## Full Example
+
+[main.dart](./example/lib/main.dart)
 
 ```dart
 import 'package:flutter/material.dart';
@@ -604,53 +293,41 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  StreamSubscription _intentDataStreamSubscription;
-  List<SharedMediaFile> _sharedFiles;
-  String _sharedText;
+  late StreamSubscription _intentSub;
+  final _sharedFiles = <SharedMediaFile>[];
 
   @override
   void initState() {
     super.initState();
 
-    // For sharing images coming from outside the app while the app is in the memory
-    _intentDataStreamSubscription =
-        ReceiveSharingIntent.getMediaStream().listen((List<SharedMediaFile> value) {
+    // Listen to media sharing coming from outside the app while the app is in the memory.
+    _intentSub = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
       setState(() {
-        print("Shared:" + (_sharedFiles?.map((f)=> f.path)?.join(",") ?? ""));
-        _sharedFiles = value;
+        _sharedFiles.clear();
+        _sharedFiles.addAll(value);
+
+        print(_sharedFiles.map((f) => f.toMap()));
       });
     }, onError: (err) {
       print("getIntentDataStream error: $err");
     });
 
-    // For sharing images coming from outside the app while the app is closed
-    ReceiveSharingIntent.getInitialMedia().then((List<SharedMediaFile> value) {
+    // Get the media sharing coming from outside the app while the app is closed.
+    ReceiveSharingIntent.instance.getInitialMedia().then((value) {
       setState(() {
-        _sharedFiles = value;
-      });
-    });
+        _sharedFiles.clear();
+        _sharedFiles.addAll(value);
+        print(_sharedFiles.map((f) => f.toMap()));
 
-    // For sharing or opening urls/text coming from outside the app while the app is in the memory
-    _intentDataStreamSubscription =
-        ReceiveSharingIntent.getTextStream().listen((String value) {
-      setState(() {
-        _sharedText = value;
-      });
-    }, onError: (err) {
-      print("getLinkStream error: $err");
-    });
-
-    // For sharing or opening urls/text coming from outside the app while the app is closed
-    ReceiveSharingIntent.getInitialText().then((String value) {
-      setState(() {
-        _sharedText = value;
+        // Tell the library that we are done processing the intent.
+        ReceiveSharingIntent.instance.reset();
       });
     });
   }
 
   @override
   void dispose() {
-    _intentDataStreamSubscription.cancel();
+    _intentSub.cancel();
     super.dispose();
   }
 
@@ -666,10 +343,9 @@ class _MyAppState extends State<MyApp> {
           child: Column(
             children: <Widget>[
               Text("Shared files:", style: textStyleBold),
-              Text(_sharedFiles?.map((f)=> f.path)?.join(",") ?? ""),
-              SizedBox(height: 100),
-              Text("Shared urls/text:", style: textStyleBold),
-              Text(_sharedText ?? "")
+              Text(_sharedFiles
+                      .map((f) => f.toMap())
+                      .join(",\n****************\n")),
             ],
           ),
         ),

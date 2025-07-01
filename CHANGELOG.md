@@ -1,3 +1,105 @@
+## 1.8.1
+
+* Fixed sharing not working on iOS 18
+
+## 1.8.0
+
+* Added support for cached images on iOS such as shared images from a Screenshot.
+
+## 1.7.0
+
+* Added `ReceiveSharingIntent.setMockValues` method to set mock values for testing purposes.
+```dart
+ReceiveSharingIntent.setMockValues(
+      initialMedia: [],
+      mediaStream: Stream.empty(),
+    );
+```
+## Breaking change
+
+* Use instance getter i.e. `ReceiveSharingIntent.instance.getInitialMedia()` instead of `ReceiveSharingIntent.getInitialMedia()`
+
+## 1.6.8
+
+* Fix sometimes file doesn't exist error on iOS
+
+## 1.6.7
+
+* Fix sharing url not working on iOS
+
+## 1.6.6
+
+* Fix compatibility issue with Android SDK <33
+
+## 1.6.5
+
+* Update deprecated API usage in Android
+
+## 1.6.4
+
+* Added a flag to disable the automatic closing of the share extension after sharing. 
+
+```swift
+class ShareViewController: RSIShareViewController {
+    
+    // Use this method to return false if you don't want to redirect to host app automatically.
+    // Default is true
+    override func shouldAutoRedirect() -> Bool {
+        return false
+    }
+    
+}
+```
+* Added new field `message` to the SharedMediaFile class.
+
+## 1.6.3
+
+* Updated readme iOS section, rearranged the steps to properly setup the plugin and added a new step #7
+
+## 1.6.2
+
+* Requires Swift 5.0
+* Fix backward compatibility down to iOS 8.0
+* Use UTType for iOS 14.0 and above
+
+## 1.6.1
+
+* Stop using UTType because it doesn't exist prior to iOS 14.0
+
+## 1.6.0
+
+### Breaking changes
+
+* All files types now come through `getInitialMedia` and `getMediaStream`
+* Your `ShareViewController` class should now inherit from `RSIShareViewController`. Eliminating the
+  need to copy the whole class again. Please check the example project for more details.
+* Removed `getInitialText`, `getInitialTextAsUri`, `getTextStream` and `getTextStreamAsUri` methods.
+  Please use `getInitialMedia` and `getMediaStream` instead.
+
+## 1.5.4
+
+* Fix broken links in readme
+
+## 1.5.3
+
+* Update readme
+* Code refactor, remove unnecessary semicolon and initialization of optional fields
+
+## 1.5.2
+
+* Fix wrong file path on iOS
+
+## 1.5.1
+
+* Update plugin's iOS build version
+
+## 1.5.0
+
+* Add support for custom group ID for iOS
+* Update android gradle build tools to 7.3.1
+* Replace deprecated jcenter with mavenCentral
+* Update android to use compileSdkVersion 34
+
 ## 1.4.5
 
 * Update android to use compileSdkVersion 30
@@ -14,7 +116,7 @@
 
 ## 1.4.2
 
-* Migrage to flutter android embedding v2
+* Migrate to flutter android embedding v2
 * Fix crash while getting raw files path on Android
 
 ## 1.4.1

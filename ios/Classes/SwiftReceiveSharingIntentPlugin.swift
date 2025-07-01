@@ -2,21 +2,19 @@ import Flutter
 import UIKit
 import Photos
 
+public let kSchemePrefix = "ShareMedia"
+public let kUserDefaultsKey = "ShareKey"
+public let kUserDefaultsMessageKey = "ShareMessageKey"
+public let kAppGroupIdKey = "AppGroupId"
+
 public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
-    static let kMessagesChannel = "receive_sharing_intent/messages";
-    static let kEventsChannelMedia = "receive_sharing_intent/events-media";
-    static let kEventsChannelLink = "receive_sharing_intent/events-text";
+    static let kMessagesChannel = "receive_sharing_intent/messages"
+    static let kEventsChannelMedia = "receive_sharing_intent/events-media"
     
-    private var customSchemePrefix = "ShareMedia";
+    private var initialMedia: [SharedMediaFile]?
+    private var latestMedia: [SharedMediaFile]?
     
-    private var initialMedia: [SharedMediaFile]? = nil
-    private var latestMedia: [SharedMediaFile]? = nil
-    
-    private var initialText: String? = nil
-    private var latestText: String? = nil
-    
-    private var eventSinkMedia: FlutterEventSink? = nil;
-    private var eventSinkText: FlutterEventSink? = nil;
+    private var eventSinkMedia: FlutterEventSink?
     
     // Singleton is required for calling functions directly from AppDelegate
     // - it is required if the developer is using also another library, which requires to call "application(_:open:options:)"
@@ -30,9 +28,6 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         let chargingChannelMedia = FlutterEventChannel(name: kEventsChannelMedia, binaryMessenger: registrar.messenger())
         chargingChannelMedia.setStreamHandler(instance)
         
-        let chargingChannelLink = FlutterEventChannel(name: kEventsChannelLink, binaryMessenger: registrar.messenger())
-        chargingChannelLink.setStreamHandler(instance)
-        
         registrar.addApplicationDelegate(instance)
     }
     
@@ -40,25 +35,21 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         
         switch call.method {
         case "getInitialMedia":
-            result(toJson(data: self.initialMedia));
-        case "getInitialText":
-            result(self.initialText);
+            result(toJson(data: self.initialMedia))
         case "reset":
             self.initialMedia = nil
             self.latestMedia = nil
-            self.initialText = nil
-            self.latestText = nil
-            result(nil);
+            result(nil)
         default:
-            result(FlutterMethodNotImplemented);
+            result(FlutterMethodNotImplemented)
         }
     }
-
-    // By Adding bundle id to prefix, we'll ensure that the correct application will be openned
+    
+    // By Adding bundle id to prefix, we'll ensure that the correct application will be opened
     // - found the issue while developing multiple applications using this library, after "application(_:open:options:)" is called, the first app using this librabry (first app by bundle id alphabetically) is opened
     public func hasMatchingSchemePrefix(url: URL?) -> Bool {
         if let url = url, let appDomain = Bundle.main.bundleIdentifier {
-            return url.absoluteString.hasPrefix("\(self.customSchemePrefix)-\(appDomain)")
+            return url.absoluteString.hasPrefix("\(kSchemePrefix)-\(appDomain)")
         }
         return false
     }
@@ -119,121 +110,82 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     }
     
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
-        if let url = url {
-            let appDomain = Bundle.main.bundleIdentifier!
-            let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
-            let userDefaults = UserDefaults(suiteName: appGroupId)
-            if url.fragment == "media" {
-                if let key = url.host?.components(separatedBy: "=").last,
-                    let json = userDefaults?.object(forKey: key) as? Data {
-                    let sharedArray = decode(data: json)
-                    let sharedMediaFiles: [SharedMediaFile] = sharedArray.compactMap {
-                        guard let path = getAbsolutePath(for: $0.path) else {
-                            return nil
-                        }
-                        if ($0.type == .video && $0.thumbnail != nil) {
-                            let thumbnail = getAbsolutePath(for: $0.thumbnail!)
-                            return SharedMediaFile.init(path: path, thumbnail: thumbnail, duration: $0.duration, type: $0.type)
-                        } else if ($0.type == .video && $0.thumbnail == nil) {
-                            return SharedMediaFile.init(path: path, thumbnail: nil, duration: $0.duration, type: $0.type)
-                        }
-                        
-                        return SharedMediaFile.init(path: path, thumbnail: nil, duration: $0.duration, type: $0.type)
-                    }
-                    latestMedia = sharedMediaFiles
-                    if(setInitialData) {
-                        initialMedia = latestMedia
-                    }
-                    eventSinkMedia?(toJson(data: latestMedia))
+        let appGroupId = Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String
+        let defaultGroupId = "group.\(Bundle.main.bundleIdentifier!)"
+        let userDefaults = UserDefaults(suiteName: appGroupId ?? defaultGroupId)
+        
+        let message = userDefaults?.string(forKey: kUserDefaultsMessageKey)
+        if let json = userDefaults?.object(forKey: kUserDefaultsKey) as? Data {
+            let sharedArray = decode(data: json)
+            let sharedMediaFiles: [SharedMediaFile] = sharedArray.compactMap {
+                guard let path = $0.type == .text || $0.type == .url ? $0.path
+                        : getAbsolutePath(for: $0.path) else {
+                    return nil
                 }
-            } else if url.fragment == "file" {
-                if let key = url.host?.components(separatedBy: "=").last,
-                    let json = userDefaults?.object(forKey: key) as? Data {
-                    let sharedArray = decode(data: json)
-                    let sharedMediaFiles: [SharedMediaFile] = sharedArray.compactMap{
-                        guard let path = getAbsolutePath(for: $0.path) else {
-                            return nil
-                        }
-                        return SharedMediaFile.init(path: $0.path, thumbnail: nil, duration: nil, type: $0.type)
-                    }
-                    latestMedia = sharedMediaFiles
-                    if(setInitialData) {
-                        initialMedia = latestMedia
-                    }
-                    eventSinkMedia?(toJson(data: latestMedia))
-                }
-            } else if url.fragment == "text" {
-                if let key = url.host?.components(separatedBy: "=").last,
-                    let sharedArray = userDefaults?.object(forKey: key) as? [String] {
-                    latestText =  sharedArray.joined(separator: ",")
-                    if(setInitialData) {
-                        initialText = latestText
-                    }
-                    eventSinkText?(latestText)
-                }
-            } else {
-                latestText = url.absoluteString
-                if(setInitialData) {
-                    initialText = latestText
-                }
-                eventSinkText?(latestText)
+                
+                return SharedMediaFile(
+                    path: path,
+                    mimeType: $0.mimeType,
+                    thumbnail: getAbsolutePath(for: $0.thumbnail),
+                    duration: $0.duration,
+                    message: message,
+                    type: $0.type
+                )
             }
-            return true
+            latestMedia = sharedMediaFiles
+            if(setInitialData) {
+                initialMedia = latestMedia
+            }
+            eventSinkMedia?(toJson(data: latestMedia))
         }
-        latestMedia = nil
-        latestText = nil
-        return false
+        return true
     }
     
     
     public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-        if (arguments as! String? == "media") {
-            eventSinkMedia = events;
-        } else if (arguments as! String? == "text") {
-            eventSinkText = events;
-        } else {
-            return FlutterError.init(code: "NO_SUCH_ARGUMENT", message: "No such argument\(String(describing: arguments))", details: nil);
-        }
-        return nil;
+        eventSinkMedia = events
+        return nil
     }
     
     public func onCancel(withArguments arguments: Any?) -> FlutterError? {
-        if (arguments as! String? == "media") {
-            eventSinkMedia = nil;
-        } else if (arguments as! String? == "text") {
-            eventSinkText = nil;
-        } else {
-            return FlutterError.init(code: "NO_SUCH_ARGUMENT", message: "No such argument as \(String(describing: arguments))", details: nil);
-        }
-        return nil;
+        eventSinkMedia = nil
+        return nil
     }
     
-    private func getAbsolutePath(for identifier: String) -> String? {
+    private func getAbsolutePath(for identifier: String?) -> String? {
+        guard let identifier else {
+            return nil
+        }
+        
         if (identifier.starts(with: "file://") || identifier.starts(with: "/var/mobile/Media") || identifier.starts(with: "/private/var/mobile")) {
             return identifier.replacingOccurrences(of: "file://", with: "")
         }
-        let phAsset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: .none).firstObject
-        if(phAsset == nil) {
+        
+        guard let phAsset = PHAsset.fetchAssets(
+            withLocalIdentifiers: [identifier],
+            options: .none).firstObject else {
             return nil
         }
-        let (url, _) = getFullSizeImageURLAndOrientation(for: phAsset!)
+        
+        let (url, _) = getFullSizeImageURLAndOrientation(for: phAsset)
         return url
+        
     }
     
     private func getFullSizeImageURLAndOrientation(for asset: PHAsset)-> (String?, Int) {
-           var url: String? = nil
-           var orientation: Int = 0
-           let semaphore = DispatchSemaphore(value: 0)
-           let options2 = PHContentEditingInputRequestOptions()
-           options2.isNetworkAccessAllowed = true
-           asset.requestContentEditingInput(with: options2){(input, info) in
-               orientation = Int(input?.fullSizeImageOrientation ?? 0)
-               url = input?.fullSizeImageURL?.path
-               semaphore.signal()
-           }
-           semaphore.wait()
-           return (url, orientation)
-       }
+        var url: String? = nil
+        var orientation: Int = 0
+        let semaphore = DispatchSemaphore(value: 0)
+        let options2 = PHContentEditingInputRequestOptions()
+        options2.isNetworkAccessAllowed = true
+        asset.requestContentEditingInput(with: options2){(input, info) in
+            orientation = Int(input?.fullSizeImageOrientation ?? 0)
+            url = input?.fullSizeImageURL?.path
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return (url, orientation)
+    }
     
     private func decode(data: Data) -> [SharedMediaFile] {
         let encodedData = try? JSONDecoder().decode([SharedMediaFile].self, from: data)
@@ -245,28 +197,75 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
             return nil
         }
         let encodedData = try? JSONEncoder().encode(data)
-         let json = String(data: encodedData!, encoding: .utf8)!
+        let json = String(data: encodedData!, encoding: .utf8)!
         return json
     }
+}
+
+
+public class SharedMediaFile: Codable {
+    var path: String
+    var mimeType: String?
+    var thumbnail: String? // video thumbnail
+    var duration: Double? // video duration in milliseconds
+    var message: String? // post message
+    var type: SharedMediaType
     
-    class SharedMediaFile: Codable {
-        var path: String;
-        var thumbnail: String?; // video thumbnail
-        var duration: Double?; // video duration in milliseconds
-        var type: SharedMediaType;
-        
-        
-        init(path: String, thumbnail: String?, duration: Double?, type: SharedMediaType) {
+    
+    public init(
+        path: String,
+        mimeType: String? = nil,
+        thumbnail: String? = nil,
+        duration: Double? = nil,
+        message: String?=nil,
+        type: SharedMediaType) {
             self.path = path
+            self.mimeType = mimeType
             self.thumbnail = thumbnail
             self.duration = duration
+            self.message = message
             self.type = type
         }
-    }
-    
-    enum SharedMediaType: Int, Codable {
-        case image
-        case video
-        case file
+}
+
+public enum SharedMediaType: String, Codable, CaseIterable {
+    case image
+    case video
+    case text
+//     case audio
+    case file
+    case url
+
+    public var toUTTypeIdentifier: String {
+        if #available(iOS 14.0, *) {
+            switch self {
+            case .image:
+                return UTType.image.identifier
+            case .video:
+                return UTType.movie.identifier
+            case .text:
+                return UTType.text.identifier
+    //         case .audio:
+    //             return UTType.audio.identifier
+            case .file:
+                return UTType.fileURL.identifier
+            case .url:
+                return UTType.url.identifier
+            }
+        }
+        switch self {
+        case .image:
+            return "public.image"
+        case .video:
+            return "public.movie"
+        case .text:
+            return "public.text"
+//         case .audio:
+//             return "public.audio"
+        case .file:
+            return "public.file-url"
+        case .url:
+            return "public.url"
+        }
     }
 }

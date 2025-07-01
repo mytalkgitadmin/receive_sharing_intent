@@ -4,9 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
-import android.media.ThumbnailUtils
+import android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
+import android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
 import android.net.Uri
-import android.provider.MediaStore
+import android.os.Parcelable
+import android.os.Build
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -16,7 +18,6 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.plugin.common.PluginRegistry.Registrar
 import io.flutter.plugin.common.PluginRegistry.NewIntentListener
 import org.json.JSONArray
 import org.json.JSONObject
@@ -34,11 +35,7 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     private var initialMedia: JSONArray? = null
     private var latestMedia: JSONArray? = null
 
-    private var initialText: String? = null
-    private var latestText: String? = null
-
     private var eventSinkMedia: EventChannel.EventSink? = null
-    private var eventSinkText: EventChannel.EventSink? = null
 
     private var binding: ActivityPluginBinding? = null
     private lateinit var applicationContext: Context
@@ -63,76 +60,50 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-        when (arguments) {
-            "media" -> eventSinkMedia = events
-            "text" -> eventSinkText = events
-        }
+        eventSinkMedia = events
     }
 
     override fun onCancel(arguments: Any?) {
-        when (arguments) {
-            "media" -> eventSinkMedia = null
-            "text" -> eventSinkText = null
-        }
+        eventSinkMedia = null
     }
-
-    // This static function is optional and equivalent to onAttachedToEngine. It supports the old
-    // pre-Flutter-1.12 Android projects. You are encouraged to continue supporting
-    // plugin registration via this function while apps migrate to use the new Android APIs
-    // post-flutter-1.12 via https://flutter.dev/go/android-project-migration.
-    //
-    // It is encouraged to share logic between onAttachedToEngine and registerWith to keep
-    // them functionally equivalent. Only one of onAttachedToEngine or registerWith will be called
-    // depending on the user's project. onAttachedToEngine or registerWith must both be defined
-    // in the same class.
-    companion object {
-        @JvmStatic
-        fun registerWith(registrar: Registrar) {
-            val instance = ReceiveSharingIntentPlugin()
-            instance.applicationContext = registrar.context()
-            instance.setupCallbackChannels(registrar.messenger())
-        }
-    }
-
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "getInitialMedia" -> result.success(initialMedia?.toString())
-            "getInitialText" -> result.success(initialText)
             "reset" -> {
                 initialMedia = null
                 latestMedia = null
-                initialText = null
-                latestText = null
                 result.success(null)
             }
+
             else -> result.notImplemented()
         }
     }
 
     private fun handleIntent(intent: Intent, initial: Boolean) {
         when {
-            (intent.type?.startsWith("text") != true)
-                    && (intent.action == Intent.ACTION_SEND
-                    || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing images or videos
+            // Sharing or opening media (image, video, text, file)
+            intent.type != null && (
+                    intent.action == Intent.ACTION_VIEW
+                            || intent.action == Intent.ACTION_SEND
+                            || intent.action == Intent.ACTION_SEND_MULTIPLE) -> {
 
                 val value = getMediaUris(intent)
                 if (initial) initialMedia = value
                 latestMedia = value
                 eventSinkMedia?.success(latestMedia?.toString())
             }
-            (intent.type == null || intent.type?.startsWith("text") == true)
-                    && intent.action == Intent.ACTION_SEND -> { // Sharing text
-                val value = intent.getStringExtra(Intent.EXTRA_TEXT)
-                if (initial) initialText = value
-                latestText = value
-                eventSinkText?.success(latestText)
-            }
-            intent.action == Intent.ACTION_VIEW -> { // Opening URL
-                val value = intent.dataString
-                if (initial) initialText = value
-                latestText = value
-                eventSinkText?.success(latestText)
+
+            // Opening URL
+            intent.action == Intent.ACTION_VIEW -> {
+                val value = JSONArray(
+                        listOf(JSONObject()
+                                .put("path", intent.dataString)
+                                .put("type", MediaType.URL.value))
+                )
+                if (initial) initialMedia = value
+                latestMedia = value
+                eventSinkMedia?.success(latestMedia?.toString())
             }
         }
     }
@@ -141,76 +112,75 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
         if (intent == null) return null
 
         return when (intent.action) {
+            Intent.ACTION_VIEW -> {
+                val uri = intent.data
+                toJsonObject(uri, null, intent.type)?.let { JSONArray(listOf(it)) }
+            }
+
             Intent.ACTION_SEND -> {
-                val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-                val path = uri?.let{ FileDirectory.getAbsolutePath(applicationContext, it) }
-                if (path != null) {
-                    val type = getMediaType(path)
-                    val thumbnail = getThumbnail(path, type)
-                    val duration = getDuration(path, type)
-                    JSONArray().put(
-                            JSONObject()
-                                    .put("path", path)
-                                    .put("type", type.ordinal)
-                                    .put("thumbnail", thumbnail)
-                                    .put("duration", duration)
-                    )
-                } else null
+                val uri = intent.parcelable<Uri>(Intent.EXTRA_STREAM)
+                val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+                toJsonObject(uri, text, intent.type)?.let { JSONArray(listOf(it)) }
             }
+
             Intent.ACTION_SEND_MULTIPLE -> {
-                val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
-                val value = uris?.mapNotNull { uri ->
-                    val path = FileDirectory.getAbsolutePath(applicationContext, uri)
-                            ?: return@mapNotNull null
-                    val type = getMediaType(path)
-                    val thumbnail = getThumbnail(path, type)
-                    val duration = getDuration(path, type)
-                    return@mapNotNull JSONObject()
-                            .put("path", path)
-                            .put("type", type.ordinal)
-                            .put("thumbnail", thumbnail)
-                            .put("duration", duration)
-                }?.toList()
-                if (value != null) JSONArray(value) else null
+                val uris = intent.parcelableArrayList<Uri>(Intent.EXTRA_STREAM)
+                val mimeTypes = intent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)
+
+                uris?.mapIndexedNotNull { index, uri ->
+                    toJsonObject(uri, null, mimeTypes?.getOrNull(index))
+                }?.let { JSONArray(it) }
             }
+
             else -> null
         }
     }
 
-    private fun getMediaType(path: String?): MediaType {
-        val mimeType = URLConnection.guessContentTypeFromName(path)
-        return when {
-            mimeType?.startsWith("image") == true -> MediaType.IMAGE
-            mimeType?.startsWith("video") == true -> MediaType.VIDEO
-            else -> MediaType.FILE
-        }
+    // content can only be uri or string
+    private fun toJsonObject(uri: Uri?, text: String?, mimeType: String?): JSONObject? {
+        val path = uri?.let { FileDirectory.getAbsolutePath(applicationContext, it) }
+        val mType = mimeType ?: path?.let { URLConnection.guessContentTypeFromName(path) }
+        val type = MediaType.fromMimeType(mType)
+        val (thumbnail, duration) = path?.let { getThumbnailAndDuration(path, type) }
+                ?: Pair(null, null)
+        return JSONObject()
+                .put("path", path ?: text)
+                .put("type", type.value)
+                .put("mimeType", mType)
+                .put("thumbnail", thumbnail)
+                .put("duration", duration)
     }
 
-    private fun getThumbnail(path: String, type: MediaType): String? {
-        if (type != MediaType.VIDEO) return null // get video thumbnail only
-
-        val videoFile = File(path)
-        val targetFile = File(applicationContext.cacheDir, "${videoFile.name}.png")
-        val bitmap = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Video.Thumbnails.MINI_KIND)
-                ?: return null
+    // Get video thumbnail and duration.
+    private fun getThumbnailAndDuration(path: String, type: MediaType): Pair<String?, Long?> {
+        if (type != MediaType.VIDEO) return Pair(null, null) // get thumbnail and duration for video only
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(path)
+        val duration = retriever.extractMetadata(METADATA_KEY_DURATION)?.toLongOrNull()
+        val bitmap = retriever.getScaledFrameAtTime(-1, OPTION_CLOSEST_SYNC, 360, 360)
+        retriever.release()
+        if (bitmap == null) return Pair(null, null)
+        val targetFile = File(applicationContext.cacheDir, "${File(path).name}.png")
         FileOutputStream(targetFile).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
         bitmap.recycle()
-        return targetFile.path
+        return Pair(targetFile.path, duration)
     }
 
-    private fun getDuration(path: String, type: MediaType): Long? {
-        if (type != MediaType.VIDEO) return null // get duration for video only
-        val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(path)
-        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-        retriever.release()
-        return duration
-    }
+    enum class MediaType(val value: String) {
+        IMAGE("image"), VIDEO("video"), TEXT("text"), FILE("file"), URL("url");
 
-    enum class MediaType {
-        IMAGE, VIDEO, FILE;
+        companion object {
+            fun fromMimeType(mimeType: String?): MediaType {
+                return when {
+                    mimeType?.startsWith("image") == true -> IMAGE
+                    mimeType?.startsWith("video") == true -> VIDEO
+                    mimeType?.startsWith("text") == true -> TEXT
+                    else -> FILE
+                }
+            }
+        }
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -235,5 +205,15 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     override fun onNewIntent(intent: Intent): Boolean {
         handleIntent(intent, false)
         return false
+    }
+
+    inline fun <reified T : Parcelable> Intent.parcelable(key: String): T? = when {
+        Build.VERSION.SDK_INT >= 33 -> getParcelableExtra(key, T::class.java)
+        else -> @Suppress("DEPRECATION") getParcelableExtra(key) as? T
+    }
+
+    inline fun <reified T : Parcelable> Intent.parcelableArrayList(key: String): ArrayList<T>? = when {
+        Build.VERSION.SDK_INT >= 33 -> getParcelableArrayListExtra(key, T::class.java)
+        else -> @Suppress("DEPRECATION") getParcelableArrayListExtra(key)
     }
 }
