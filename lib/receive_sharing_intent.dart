@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+
 import 'src/receive_sharing_intent_mobile.dart';
 
 part 'src/data/shared_media_file.dart';
@@ -56,6 +57,14 @@ abstract class ReceiveSharingIntent extends PlatformInterface {
   /// not emit that initial one - query either the `getInitialMedia` instead.
   Stream<List<SharedMediaFile>> getMediaStream() {
     throw UnimplementedError('getMediaStream() has not been implemented.');
+  }
+
+  Stream<String> getTextStream() {
+    throw UnimplementedError('getTextStream() has not been implemented.');
+  }
+
+  Stream<Uri> getTextStreamAsUri() {
+    throw UnimplementedError('getTextStreamAsUri() has not been implemented.');
   }
 
   /// Call this method if you already consumed the callback

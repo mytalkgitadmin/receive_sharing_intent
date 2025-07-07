@@ -14,7 +14,11 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
   final eChannelMedia =
       const EventChannel("receive_sharing_intent/events-media");
 
+  static const EventChannel _eChannelText =
+      const EventChannel("receive_sharing_intent/events-text");
+
   static Stream<List<SharedMediaFile>>? _streamMedia;
+  static Stream<String>? _streamText;
 
   @override
   Future<List<SharedMediaFile>> getInitialMedia() async {
@@ -46,6 +50,25 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
       );
     }
     return _streamMedia!;
+  }
+
+  @override
+  Stream<String> getTextStream() {
+    if (_streamText == null) {
+      _streamText = _eChannelText.receiveBroadcastStream("text").cast<String>();
+    }
+    return _streamText!;
+  }
+
+  @override
+  Stream<Uri> getTextStreamAsUri() {
+    return getTextStream().transform<Uri>(
+      new StreamTransformer<String, Uri>.fromHandlers(
+        handleData: (String data, EventSink<Uri> sink) {
+          sink.add(Uri.parse(data));
+        },
+      ),
+    );
   }
 
   @override

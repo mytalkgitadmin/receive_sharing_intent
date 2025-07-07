@@ -35,7 +35,11 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     private var initialMedia: JSONArray? = null
     private var latestMedia: JSONArray? = null
 
+    private var initialText: String? = null
+    private var latestText: String? = null
+
     private var eventSinkMedia: EventChannel.EventSink? = null
+    private var eventSinkText: EventChannel.EventSink? = null
 
     private var binding: ActivityPluginBinding? = null
     private lateinit var applicationContext: Context
@@ -60,19 +64,28 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-        eventSinkMedia = events
+        when (arguments) {
+            "media" -> eventSinkMedia = events
+            "text" -> eventSinkText = events
+        }
     }
 
     override fun onCancel(arguments: Any?) {
-        eventSinkMedia = null
+        when (arguments) {
+            "media" -> eventSinkMedia = null
+            "text" -> eventSinkText = null
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "getInitialMedia" -> result.success(initialMedia?.toString())
+            "getInitialText" -> result.success(initialText)
             "reset" -> {
                 initialMedia = null
                 latestMedia = null
+                initialText = null
+                latestText = null
                 result.success(null)
             }
 
@@ -85,7 +98,8 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
             // Sharing or opening media (image, video, text, file)
             intent.type != null && (
                     intent.action == Intent.ACTION_VIEW
-                            || intent.action == Intent.ACTION_SEND
+                            || (intent.type?.startsWith("text") != true)
+                            && intent.action == Intent.ACTION_SEND
                             || intent.action == Intent.ACTION_SEND_MULTIPLE) -> {
 
                 val value = getMediaUris(intent)
@@ -94,6 +108,13 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
                 eventSinkMedia?.success(latestMedia?.toString())
             }
 
+            (intent.type == null || intent.type?.startsWith("text") == true)
+                    && intent.action == Intent.ACTION_SEND -> { // Sharing text
+                val value = intent.getStringExtra(Intent.EXTRA_TEXT)
+                if (initial) initialText = value
+                latestText = value
+                eventSinkText?.success(latestText)
+            }
             // Opening URL
             intent.action == Intent.ACTION_VIEW -> {
                 val value = JSONArray(
