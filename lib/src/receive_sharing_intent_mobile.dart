@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -33,8 +34,9 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
   @override
   Stream<List<SharedMediaFile>> getMediaStream() {
     if (_streamMedia == null) {
-      final stream =
-          eChannelMedia.receiveBroadcastStream('media').cast<String?>();
+      final stream = Platform.isAndroid
+          ? eChannelMedia.receiveBroadcastStream('media').cast<String?>()
+          : eChannelMedia.receiveBroadcastStream().cast<String?>();
       _streamMedia = stream.transform<List<SharedMediaFile>>(
         StreamTransformer<String?, List<SharedMediaFile>>.fromHandlers(
           handleData: (data, sink) {
