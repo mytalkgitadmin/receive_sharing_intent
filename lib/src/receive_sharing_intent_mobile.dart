@@ -33,7 +33,8 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
   @override
   Stream<List<SharedMediaFile>> getMediaStream() {
     if (_streamMedia == null) {
-      final stream = eChannelMedia.receiveBroadcastStream().cast<String?>();
+      final stream =
+          eChannelMedia.receiveBroadcastStream('media').cast<String?>();
       _streamMedia = stream.transform<List<SharedMediaFile>>(
         StreamTransformer<String?, List<SharedMediaFile>>.fromHandlers(
           handleData: (data, sink) {
@@ -55,7 +56,7 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
   @override
   Stream<String> getTextStream() {
     if (_streamText == null) {
-      _streamText = _eChannelText.receiveBroadcastStream("text").cast<String>();
+      _streamText = _eChannelText.receiveBroadcastStream('text').cast<String>();
     }
     return _streamText!;
   }
