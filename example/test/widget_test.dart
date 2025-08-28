@@ -8,7 +8,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-
 import 'package:receive_sharing_intent_example/main.dart';
 
 void main() {
@@ -20,6 +19,8 @@ void main() {
     ReceiveSharingIntent.setMockValues(
       initialMedia: [],
       mediaStream: Stream.empty(),
+      initialText: '',
+      textStream: Stream.empty(),
     );
 
     // Verify that platform version is retrieved.

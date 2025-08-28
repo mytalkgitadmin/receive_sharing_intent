@@ -56,6 +56,12 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
   }
 
   @override
+  Future<String> getInitialText() async {
+    final initialText = await mChannel.invokeMethod('getInitialText');
+    return initialText;
+  }
+
+  @override
   Stream<String> getTextStream() {
     if (_streamText == null) {
       _streamText = _eChannelText.receiveBroadcastStream('text').cast<String>();
@@ -72,12 +78,6 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
         },
       ),
     );
-  }
-
-  @override
-  Future<String> getInitialText() async {
-    final initialText = await mChannel.invokeMethod('getInitialText');
-    return initialText;
   }
 
   @override

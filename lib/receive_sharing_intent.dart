@@ -82,10 +82,14 @@ abstract class ReceiveSharingIntent extends PlatformInterface {
   static void setMockValues({
     required List<SharedMediaFile> initialMedia,
     required Stream<List<SharedMediaFile>> mediaStream,
+    required String initialText,
+    required Stream<String> textStream,
   }) {
     ReceiveSharingIntent.instance = _ReceiveSharingIntentMock(
       initialMedia: List.from(initialMedia),
       mediaStream: mediaStream,
+      initialText: initialText,
+      textStream: textStream,
     );
   }
 }
@@ -94,10 +98,14 @@ abstract class ReceiveSharingIntent extends PlatformInterface {
 class _ReceiveSharingIntentMock extends ReceiveSharingIntent {
   final List<SharedMediaFile> initialMedia;
   final Stream<List<SharedMediaFile>> mediaStream;
+  final String initialText;
+  final Stream<String> textStream;
 
   _ReceiveSharingIntentMock({
     required this.initialMedia,
     required this.mediaStream,
+    required this.initialText,
+    required this.textStream,
   });
 
   @override
@@ -108,6 +116,16 @@ class _ReceiveSharingIntentMock extends ReceiveSharingIntent {
   @override
   Stream<List<SharedMediaFile>> getMediaStream() {
     return mediaStream;
+  }
+
+  @override
+  Future<String> getInitialText() async {
+    return initialText;
+  }
+
+  @override
+  Stream<String> getTextStream() {
+    return textStream;
   }
 
   @override

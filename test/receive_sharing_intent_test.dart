@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'dart:async';
 
+import 'package:flutter_test/flutter_test.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 void main() {
@@ -16,6 +16,8 @@ void main() {
     ReceiveSharingIntent.setMockValues(
       initialMedia: expectedMediaFiles,
       mediaStream: streamController.stream,
+      initialText: '',
+      textStream: StreamController<String>.broadcast().stream,
     );
 
     // Test getInitialMedia
