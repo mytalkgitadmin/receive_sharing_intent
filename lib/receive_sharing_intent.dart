@@ -67,6 +67,10 @@ abstract class ReceiveSharingIntent extends PlatformInterface {
     throw UnimplementedError('getTextStreamAsUri() has not been implemented.');
   }
 
+  Future<String> getInitialText() {
+    throw UnimplementedError('getInitialText() has not been implemented.');
+  }
+
   /// Call this method if you already consumed the callback
   /// and don't want the same callback again
   Future<dynamic> reset() {
