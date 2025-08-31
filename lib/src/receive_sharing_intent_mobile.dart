@@ -56,7 +56,7 @@ class ReceiveSharingIntentMobile extends ReceiveSharingIntent {
   }
 
   @override
-  Future<String> getInitialText() async {
+  Future<String?> getInitialText() async {
     final initialText = await mChannel.invokeMethod('getInitialText');
     return initialText;
   }
