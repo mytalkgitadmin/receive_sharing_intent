@@ -186,6 +186,9 @@ open class RSIShareViewController: SLComposeServiceViewController {
         let userDefaults = UserDefaults(suiteName: appGroupId)
         userDefaults?.set(toData(data: sharedMedia), forKey: kUserDefaultsKey)
         userDefaults?.set(message, forKey: kUserDefaultsMessageKey)
+        // host 앱이 cold start URL callback을 놓쳐도 App Group에서 payload를
+        // 복구할 수 있도록 저장 완료 후 미소비 상태를 표시한다.
+        userDefaults?.set(true, forKey: kUserDefaultsPendingKey)
         userDefaults?.synchronize()
         redirectToHostApp()
     }

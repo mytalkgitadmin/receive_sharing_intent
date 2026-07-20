@@ -5,6 +5,7 @@ import Photos
 public let kSchemePrefix = "ShareMedia"
 public let kUserDefaultsKey = "ShareKey"
 public let kUserDefaultsMessageKey = "ShareMessageKey"
+public let kUserDefaultsPendingKey = "SharePendingKey"
 public let kAppGroupIdKey = "AppGroupId"
 
 public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
@@ -35,10 +36,12 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         
         switch call.method {
         case "getInitialMedia":
+            loadPendingMediaIfNeeded()
             result(toJson(data: self.initialMedia))
         case "reset":
             self.initialMedia = nil
             self.latestMedia = nil
+            clearPendingMedia()
             result(nil)
         default:
             result(FlutterMethodNotImplemented)
@@ -115,35 +118,79 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     }
     
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
-        let appGroupId = Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String
-        let defaultGroupId = "group.\(Bundle.main.bundleIdentifier!)"
-        let userDefaults = UserDefaults(suiteName: appGroupId ?? defaultGroupId)
-        
-        let message = userDefaults?.string(forKey: kUserDefaultsMessageKey)
-        if let json = userDefaults?.object(forKey: kUserDefaultsKey) as? Data {
-            let sharedArray = decode(data: json)
-            let sharedMediaFiles: [SharedMediaFile] = sharedArray.compactMap {
-                guard let path = $0.type == .text || $0.type == .url ? $0.path
-                        : getAbsolutePath(for: $0.path) else {
-                    return nil
-                }
-                
-                return SharedMediaFile(
-                    path: path,
-                    mimeType: $0.mimeType,
-                    thumbnail: getAbsolutePath(for: $0.thumbnail),
-                    duration: $0.duration,
-                    message: message,
-                    type: $0.type
-                )
-            }
-            latestMedia = sharedMediaFiles
-            if(setInitialData) {
-                initialMedia = latestMedia
-            }
-            eventSinkMedia?(toJson(data: latestMedia))
+        guard let sharedMediaFiles = consumePendingMedia() else {
+            return true
         }
+
+        latestMedia = sharedMediaFiles
+        if(setInitialData) {
+            initialMedia = latestMedia
+        }
+        eventSinkMedia?(toJson(data: latestMedia))
         return true
+    }
+
+    /// cold start URL callback과 Dart 초기 조회의 실행 순서는 iOS가 보장하지
+    /// 않는다. callback이 메모리를 채우기 전에 getInitialMedia가 호출돼도
+    /// Share Extension이 App Group에 남긴 미소비 payload를 직접 이어받는다.
+    private func loadPendingMediaIfNeeded() {
+        guard initialMedia == nil,
+              let sharedMediaFiles = consumePendingMedia() else {
+            return
+        }
+
+        latestMedia = sharedMediaFiles
+        initialMedia = sharedMediaFiles
+    }
+
+    /// App Group payload는 URL callback 또는 getInitialMedia 중 먼저 도달한
+    /// 경로가 한 번만 claim한다. claim 직후 영구 저장값을 제거하므로 동일한
+    /// 공유가 두 경로에서 중복 전달되거나 다음 앱 실행에서 재노출되지 않는다.
+    private func consumePendingMedia() -> [SharedMediaFile]? {
+        let userDefaults = sharingUserDefaults()
+        guard userDefaults?.bool(forKey: kUserDefaultsPendingKey) == true,
+              let json = userDefaults?.object(forKey: kUserDefaultsKey) as? Data else {
+            return nil
+        }
+
+        let message = userDefaults?.string(forKey: kUserDefaultsMessageKey)
+        let sharedArray = decode(data: json)
+        let sharedMediaFiles: [SharedMediaFile] = sharedArray.compactMap {
+            guard let path = $0.type == .text || $0.type == .url ? $0.path
+                    : getAbsolutePath(for: $0.path) else {
+                return nil
+            }
+
+            return SharedMediaFile(
+                path: path,
+                mimeType: $0.mimeType,
+                thumbnail: getAbsolutePath(for: $0.thumbnail),
+                duration: $0.duration,
+                message: message,
+                type: $0.type
+            )
+        }
+        clearPendingMedia(userDefaults: userDefaults)
+        return sharedMediaFiles
+    }
+
+    private func sharingUserDefaults() -> UserDefaults? {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+            return nil
+        }
+        let appGroupId = Bundle.main.object(
+            forInfoDictionaryKey: kAppGroupIdKey
+        ) as? String
+        return UserDefaults(
+            suiteName: appGroupId ?? "group.\(bundleIdentifier)"
+        )
+    }
+
+    private func clearPendingMedia(userDefaults: UserDefaults? = nil) {
+        let defaults = userDefaults ?? sharingUserDefaults()
+        defaults?.removeObject(forKey: kUserDefaultsPendingKey)
+        defaults?.removeObject(forKey: kUserDefaultsKey)
+        defaults?.removeObject(forKey: kUserDefaultsMessageKey)
     }
     
     
