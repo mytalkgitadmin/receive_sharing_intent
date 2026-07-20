@@ -89,7 +89,12 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     // Reference: https://developer.apple.com/documentation/uikit/uiapplicationdelegate/1623112-application
     public func application(_ application: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
         if (hasMatchingSchemePrefix(url: url)) {
-            return handleUrl(url: url, setInitialData: false)
+            // iOS cold start에서는 application(open:)이 Dart stream listener
+            // 등록보다 먼저 호출될 수 있다. listener가 없으면 stream 이벤트가
+            // 유실되므로 initialMedia에도 저장해 getInitialMedia()가 이어받게 한다.
+            // warm 상태에서는 기존처럼 stream으로만 전달해 중복 처리를 막는다.
+            let shouldStoreAsInitialMedia = eventSinkMedia == nil
+            return handleUrl(url: url, setInitialData: shouldStoreAsInitialMedia)
         }
         return false
     }
