@@ -186,8 +186,11 @@ open class RSIShareViewController: SLComposeServiceViewController {
         let userDefaults = UserDefaults(suiteName: appGroupId)
         userDefaults?.set(toData(data: sharedMedia), forKey: kUserDefaultsKey)
         userDefaults?.set(message, forKey: kUserDefaultsMessageKey)
-        // host 앱이 cold start URL callback을 놓쳐도 App Group에서 payload를
-        // 복구할 수 있도록 저장 완료 후 미소비 상태를 표시한다.
+        // Share Extension과 host 앱은 별도 프로세스이므로 payload와 message를
+        // App Group에 먼저 저장한다. pending은 두 값의 저장이 모두 끝났음을
+        // 알리는 commit marker이며 host 앱은 true인 데이터만 소비한다.
+        // cold start URL callback을 놓치거나 Dart 초기 조회가 먼저 실행돼도
+        // 이 marker를 기준으로 동일한 payload를 한 번만 안전하게 이어받는다.
         userDefaults?.set(true, forKey: kUserDefaultsPendingKey)
         userDefaults?.synchronize()
         redirectToHostApp()

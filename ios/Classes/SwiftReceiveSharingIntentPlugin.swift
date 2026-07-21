@@ -131,8 +131,10 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     }
 
     /// cold start URL callback과 Dart 초기 조회의 실행 순서는 iOS가 보장하지
-    /// 않는다. callback이 메모리를 채우기 전에 getInitialMedia가 호출돼도
-    /// Share Extension이 App Group에 남긴 미소비 payload를 직접 이어받는다.
+    /// 않는다. 정상적인 callback 경로가 먼저 실행되면 handleUrl이 payload를
+    /// initialMedia에 보관한다. 반대로 getInitialMedia가 먼저 실행되면 이 함수가
+    /// App Group의 pending payload를 직접 복구한다. initialMedia가 이미 있으면
+    /// 다시 읽지 않아 두 경로가 같은 공유 데이터를 중복 전달하지 않게 한다.
     private func loadPendingMediaIfNeeded() {
         guard initialMedia == nil,
               let sharedMediaFiles = consumePendingMedia() else {
@@ -144,8 +146,10 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     }
 
     /// App Group payload는 URL callback 또는 getInitialMedia 중 먼저 도달한
-    /// 경로가 한 번만 claim한다. claim 직후 영구 저장값을 제거하므로 동일한
-    /// 공유가 두 경로에서 중복 전달되거나 다음 앱 실행에서 재노출되지 않는다.
+    /// 경로가 한 번만 claim한다. Share Extension이 payload와 message를 모두
+    /// 저장한 뒤 pending을 true로 기록하므로, pending은 완전하게 저장된 데이터만
+    /// 읽기 위한 commit marker 역할을 한다. claim 직후 영구 저장값을 제거해
+    /// 뒤늦게 도착한 다른 경로가 같은 공유를 다시 전달하지 못하게 한다.
     private func consumePendingMedia() -> [SharedMediaFile]? {
         let userDefaults = sharingUserDefaults()
         guard userDefaults?.bool(forKey: kUserDefaultsPendingKey) == true,
@@ -188,6 +192,9 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
 
     private func clearPendingMedia(userDefaults: UserDefaults? = nil) {
         let defaults = userDefaults ?? sharingUserDefaults()
+        // pending만 제거하고 payload를 남기면 다음 공유 저장 실패나 앱 재설치 전
+        // 상태 복구 과정에서 이전 파일이 다시 노출될 수 있다. 정상 소비와 Dart의
+        // reset 모두 marker, payload, message를 하나의 단위로 완전히 정리한다.
         defaults?.removeObject(forKey: kUserDefaultsPendingKey)
         defaults?.removeObject(forKey: kUserDefaultsKey)
         defaults?.removeObject(forKey: kUserDefaultsMessageKey)
