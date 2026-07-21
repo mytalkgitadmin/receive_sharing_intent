@@ -101,7 +101,11 @@ object FileDirectory {
                     val columnIndex = cursor.getColumnIndexOrThrow(column)
                     val fileName = cursor.getString(columnIndex)
                     Log.i("FileDirectory", "File name: $fileName")
-                    targetFile = File(context.cacheDir, fileName)
+                    // 서로 다른 공유 intent가 같은 _display_name을 전달해도 기존
+                    // cache 복사본을 덮어쓰지 않도록 UUID를 붙인다. provider가 경로
+                    // 구분자를 포함해도 cache 밖으로 벗어나지 않게 basename만 사용한다.
+                    val safeFileName = File(fileName).name.ifBlank { "shared-file" }
+                    targetFile = File(context.cacheDir, "${UUID.randomUUID()}_$safeFileName")
                 }
             } finally {
                 cursor?.close()
@@ -117,7 +121,7 @@ object FileDirectory {
                     }
                 }
                 val type = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
-                targetFile = File(context.cacheDir, "${prefix}_${Date().time}.$type")
+                targetFile = File(context.cacheDir, "${prefix}_${UUID.randomUUID()}.$type")
             }
 
             context.contentResolver.openInputStream(uri)?.use { input ->
