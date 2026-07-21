@@ -11,8 +11,19 @@ void main() {
     final plugin = File(
       'android/src/main/kotlin/com/kasem/receive_sharing_intent/ReceiveSharingIntentPlugin.kt',
     ).readAsStringSync();
+    final displayNameFallback = fileDirectory.substring(
+      fileDirectory.indexOf('val column = "_display_name"'),
+      fileDirectory.indexOf('if (targetFile == null)'),
+    );
 
     expect(fileDirectory, contains('UUID.randomUUID()'));
+    expect(displayNameFallback, contains('cursor.getColumnIndex(column)'));
+    expect(displayNameFallback, contains('if (!fileName.isNullOrBlank())'));
+    expect(
+      displayNameFallback,
+      isNot(contains('getColumnIndexOrThrow(column)')),
+    );
+    expect(displayNameFallback, contains('catch (_: Exception)'));
     expect(
       fileDirectory,
       contains('"bfshare-\${UUID.randomUUID()}-\$safeFileName"'),

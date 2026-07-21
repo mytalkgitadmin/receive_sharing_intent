@@ -12,7 +12,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.*
 import android.webkit.MimeTypeMap
-import android.util.Log
 
 
 object FileDirectory {
@@ -98,20 +97,26 @@ object FileDirectory {
             try {
                 cursor = context.contentResolver.query(uri, projection, selection, selectionArgs, null)
                 if (cursor != null && cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndexOrThrow(column)
-                    val fileName = cursor.getString(columnIndex)
-                    Log.i("FileDirectory", "File name: $fileName")
-                    // 서로 다른 공유 intent가 같은 _display_name을 전달해도 기존
-                    // cache 복사본을 덮어쓰지 않도록 물리 파일명에 marker와 UUID를
-                    // 붙인다. host 앱은 업로드 직전에 marker를 제거해 사용자에게는
-                    // provider의 논리 파일명만 표시한다. 경로 구분자는 basename으로
-                    // 제거해 cache 밖으로 벗어나지 못하게 한다.
-                    val safeFileName = File(fileName).name.ifBlank { "shared-file" }
-                    targetFile = File(
-                            context.cacheDir,
-                            "bfshare-${UUID.randomUUID()}-$safeFileName"
-                    )
+                    val columnIndex = cursor.getColumnIndex(column)
+                    val fileName = if (columnIndex >= 0) cursor.getString(columnIndex) else null
+                    if (!fileName.isNullOrBlank()) {
+                        // 서로 다른 공유 intent가 같은 _display_name을 전달해도 기존
+                        // cache 복사본을 덮어쓰지 않도록 물리 파일명에 marker와 UUID를
+                        // 붙인다. host 앱은 업로드 직전에 marker를 제거해 사용자에게는
+                        // provider의 논리 파일명만 표시한다. 경로 구분자는 basename으로
+                        // 제거해 cache 밖으로 벗어나지 못하게 한다.
+                        val safeFileName = File(fileName).name.ifBlank { "shared-file" }
+                        targetFile = File(
+                                context.cacheDir,
+                                "bfshare-${UUID.randomUUID()}-$safeFileName"
+                        )
+                    }
                 }
+            } catch (_: Exception) {
+                // 일부 provider는 _display_name projection을 지원하지 않는다. 이 경우
+                // URI나 예외에 파일 정보가 포함될 수 있으므로 로그 없이 MIME fallback을
+                // 사용한다.
+                targetFile = null
             } finally {
                 cursor?.close()
             }
