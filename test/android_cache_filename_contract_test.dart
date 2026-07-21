@@ -15,10 +15,23 @@ void main() {
     expect(fileDirectory, contains('UUID.randomUUID()'));
     expect(
       fileDirectory,
+      contains('"bfshare-\${UUID.randomUUID()}-\$safeFileName"'),
+    );
+    expect(fileDirectory, contains('"shared-image\$extension"'));
+    expect(fileDirectory, contains('"shared-video\$extension"'));
+    expect(fileDirectory, contains('"shared-file\$extension"'));
+    expect(
+      fileDirectory,
       isNot(contains('File(context.cacheDir, fileName)')),
     );
     expect(plugin, contains('UUID.randomUUID()'));
     expect(plugin, contains('import java.util.UUID'));
+    expect(
+      plugin,
+      contains(
+        '"bfshare-\${UUID.randomUUID()}-thumbnail-\${File(path).name}.png"',
+      ),
+    );
     expect(
       plugin,
       isNot(

@@ -186,7 +186,7 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
         // 이 고유 경로를 공유 session 종료 시 원본 cache와 함께 안전하게 정리한다.
         val targetFile = File(
                 applicationContext.cacheDir,
-                "${UUID.randomUUID()}_${File(path).name}.png"
+                "bfshare-${UUID.randomUUID()}-thumbnail-${File(path).name}.png"
         )
         FileOutputStream(targetFile).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)

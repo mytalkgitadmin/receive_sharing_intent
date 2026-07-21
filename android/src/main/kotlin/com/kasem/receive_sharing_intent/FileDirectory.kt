@@ -102,10 +102,15 @@ object FileDirectory {
                     val fileName = cursor.getString(columnIndex)
                     Log.i("FileDirectory", "File name: $fileName")
                     // 서로 다른 공유 intent가 같은 _display_name을 전달해도 기존
-                    // cache 복사본을 덮어쓰지 않도록 UUID를 붙인다. provider가 경로
-                    // 구분자를 포함해도 cache 밖으로 벗어나지 않게 basename만 사용한다.
+                    // cache 복사본을 덮어쓰지 않도록 물리 파일명에 marker와 UUID를
+                    // 붙인다. host 앱은 업로드 직전에 marker를 제거해 사용자에게는
+                    // provider의 논리 파일명만 표시한다. 경로 구분자는 basename으로
+                    // 제거해 cache 밖으로 벗어나지 못하게 한다.
                     val safeFileName = File(fileName).name.ifBlank { "shared-file" }
-                    targetFile = File(context.cacheDir, "${UUID.randomUUID()}_$safeFileName")
+                    targetFile = File(
+                            context.cacheDir,
+                            "bfshare-${UUID.randomUUID()}-$safeFileName"
+                    )
                 }
             } finally {
                 cursor?.close()
@@ -120,8 +125,20 @@ object FileDirectory {
                         else -> "FILE"
                     }
                 }
-                val type = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
-                targetFile = File(context.cacheDir, "${prefix}_${UUID.randomUUID()}.$type")
+                val extension = MimeTypeMap.getSingleton()
+                        .getExtensionFromMimeType(mimeType)
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { ".$it" }
+                        ?: ""
+                val logicalFileName = when (prefix) {
+                    "IMG" -> "shared-image$extension"
+                    "VID" -> "shared-video$extension"
+                    else -> "shared-file$extension"
+                }
+                targetFile = File(
+                        context.cacheDir,
+                        "bfshare-${UUID.randomUUID()}-$logicalFileName"
+                )
             }
 
             context.contentResolver.openInputStream(uri)?.use { input ->
